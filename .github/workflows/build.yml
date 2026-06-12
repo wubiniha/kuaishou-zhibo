@@ -1,0 +1,56 @@
+name: 构建 Windows 可执行文件
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      description:
+        description: '构建说明'
+        required: false
+        default: '手动触发构建'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+          pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+      - name: 安装 Playwright 浏览器
+        run: python -m playwright install chromium
+        shell: bash
+
+      - name: PyInstaller 打包
+        run: |
+          pyinstaller build_windows.spec --clean
+
+      - name: 打包为 zip
+        run: |
+          Compress-Archive -Path dist/kuaishou-live.exe -DestinationPath dist/kuaishou-live-windows.zip
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: kuaishou-live-windows
+          path: dist/kuaishou-live-windows.zip
+          retention-days: 30
+
+      - name: 发布到 Release（仅 tag 触发）
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/kuaishou-live-windows.zip
+          generate_release_notes: true
